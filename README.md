@@ -20,7 +20,7 @@ moves randomly over the window surface.
 ## Usage
 Run in command line:
     
-    python crazy-clicker_game.py
+    python crazy_clicker_game.py
 
 
 ### Contributing
@@ -33,11 +33,11 @@ Install dependencies to run tests and linters
 4. Run unittests and linter:
     ```
     flake8
-    python -m unittest
+    pytest
     ```
 
 
 ## TODO to upgrade from v1.0.0 to v1.0.1
 - [ ] Implement controller
-- [ ] Add unittests
+- [ ] Gain 30% of code coverage 
 - [ ] Add CI/CD
