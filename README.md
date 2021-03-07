@@ -37,7 +37,15 @@ Install dependencies to run tests and linters
     ```
 
 
-## TODO to upgrade from v1.0.0 to v1.0.1
-- [ ] Implement controller
-- [ ] Gain 30% of code coverage 
-- [ ] Add CI/CD
+## TODO & Changelog:
+## Upgrade from v1.0.0 to v1.0.1
+- [x] Implement controller
+- [x] Gain 40% of code coverage 
+- [x] Add CI/CD
+
+## Upgrade from v1.0.1 to v1.0.2
+- [ ] Move all testing configuration to `tox.ini`
+- [ ] Add MyPy static type checker
+
+## Upgrade from v1.0.2 to v1.0.3
+- [ ] Add gathering statistics
