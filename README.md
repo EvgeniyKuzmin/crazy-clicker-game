@@ -44,7 +44,7 @@ Install dependencies to run tests and linters
 - [x] Add CI/CD
 
 ### Upgrade from v1.0.1 to v1.0.2
-- [ ] Move all testing configuration to `tox.ini`
+- [x] Move all testing configuration to `tox.ini`
 - [ ] Add MyPy static type checker
 
 ### Upgrade from v1.0.2 to v1.0.3
