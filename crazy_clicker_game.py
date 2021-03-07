@@ -4,32 +4,38 @@ from random import randint
 import time
 import tkinter as tk
 from tkinter import messagebox
-from typing import Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 
 CONFIG = {
-    'title': 'CRAZY CLICKER',
-    'defaults': {
-        'seconds': 10,
-        'seconds_min': 10,
-        'seconds_max': 120,
-        'clicks': 50,
-        'clicks_min': 10,
-        'clicks_max': 300,
-        'button_width': 191,
-        'button_height': 47,
-    },
-    'colors': {
-        'menu': 'grey',
-        'surface': 'white',
-    },
-    'fonts': {
-        'L': ('Arial', '18'),
-        'S': ('Arial', '14'),
-    },
-    'window_size': {
-        'width': 410,
-        'height': 170,
+    'view_settings': {
+        'title': 'CRAZY CLICKER',
+        'window_size': {
+            'width': 410,
+            'height': 170,
+        },
+        'seconds': {
+            'default': 10,
+            'min': 10,
+            'max': 120,
+        },
+        'clicks': {
+            'default': 50,
+            'min': 10,
+            'max': 300,
+        },
+        'button': {
+            'width': 191,
+            'height': 47,
+        },
+        'colors': {
+            'menu': 'grey',
+            'surface': 'white',
+        },
+        'fonts': {
+            'L': ('Arial', '18'),
+            'S': ('Arial', '14'),
+        },
     },
     'phrases': {
         'start_phrase': 'Click START',
@@ -42,7 +48,6 @@ CONFIG = {
             'PUSH, PUSH!!',
             'Give MORE!',
             'Almost...',
-            'Well done...',
         ],
     },
 }
@@ -112,175 +117,239 @@ class CrazyClickerModel:
             return self._phrase_mapping[self.clicks]
 
 
+class CrazyClickerController:
+
+    def __init__(self, model: 'CrazyClickerModel') -> None:
+        self._model = model
+        self._view = None
+
+    def set_view(self, view: 'CrazyClickerInterface') -> None:
+        self._view = view
+
+    def start_game(self) -> None:
+        self._model.start_game(self._view.press_count, self._view.time)
+        self._view.draw_initial_state(self._model.phrase)
+        self.update_time()
+
+    def update_time(self) -> None:
+        if self._model.state == 'game':
+            self._view.update_time_label(self._model.seconds_left)
+            self._view.after(1000, self.update_time)
+        elif self._model.state == 'fail':
+            self._view.draw_end_game(win=False, phrase=self._model.phrase)
+
+    def update_count(self) -> None:
+        if self._view.mode:
+            self._view.move_button()
+
+        self._model.register_click()
+        if self._model.state == 'game':
+            self._view.update_button_phrase(self._model.phrase)
+            self._view.update_click_label(self._model.clicks)
+        else:
+            self._view.draw_end_game(
+                win=self._model.state == 'win',
+                phrase=self._model.phrase)
+
+    def run_application(self) -> None:
+        self._view.build(self._model.phrase)
+        self._view.master.mainloop()
+
+
 class CrazyClickerInterface(tk.Frame):
 
     def __init__(
-            self, master, seconds, seconds_min, seconds_max, clicks,
-            clicks_min, clicks_max, button_width, button_height, model):
+            self, controller: 'CrazyClickerController',
+            settings: Dict[str, Any]) -> None:
 
-        self._model = model
-        super().__init__(master)
-        self.master = master
+        self._controller = controller
+        self._settings = settings
 
-        self.button_width = button_width
-        self.button_height = button_height
-        self.seconds_min = seconds_min
-        self.seconds_max = seconds_max
-        self.clicks_min = clicks_min
-        self.clicks_max = clicks_max
+        self.master = None
+        self._build_master()
 
-        self.mode_var = tk.BooleanVar()
-        self.time_var = tk.IntVar()
-        self.time_var.set(seconds)
-        self.press_count_var = tk.IntVar()
-        self.press_count_var.set(clicks)
+        self._mode_var = tk.BooleanVar()
+        self._time_var = tk.IntVar()
+        self._press_count_var = tk.IntVar()
+        self.time = self._settings['seconds']['default']
+        self.press_count = self._settings['clicks']['default']
 
-        self.start_game_button = None
-        self.frame_with_button = None
-        self.button = None
-        self.time_last_label = None
-        self.click_count_label = None
+        self._start_game_button = None
+        self._buttons_frame = None
+        self._button = None
+        self._time_last_label = None
+        self._click_count_label = None
 
-        self.button_clicks = 0
-        self.stop_game = False
-        self.start_time = int(time.time())
-        self.click_phrase_mapping = None
+    def _build_master(self) -> None:
+        root = tk.Tk()
+        root.title(self._settings['title'])
+        root.minsize(**self._settings['window_size'])
+        self.master = root
+        super().__init__(self.master)
 
-    def build(self):
-        self.pack(fill='both', expand=True)
-        self._build_menu_frame()
-        self._build_game_frame()
-        self._build_result_frame()
-
-    def _build_menu_frame(self):
-        frame_menu = tk.Frame(self, bg=CONFIG['colors']['menu'])
+    def _build_menu_frame(self) -> None:
+        frame_menu = tk.Frame(self, bg=self._settings['colors']['menu'])
         frame_menu.pack(side='top', fill='x')
 
-        frame_menu_fields = tk.Frame(frame_menu, bg=CONFIG['colors']['menu'])
+        frame_menu_fields = tk.Frame(
+            frame_menu, bg=self._settings['colors']['menu'])
         frame_menu_fields.pack(padx=5, pady=5)
 
         mode_check = tk.Checkbutton(
             frame_menu_fields,
-            variable=self.mode_var, font=CONFIG['fonts']['S'],
-            bg=CONFIG['colors']['menu'])
+            variable=self._mode_var,
+            font=self._settings['fonts']['S'],
+            bg=self._settings['colors']['menu'])
         mode_check.pack(side='left')
 
         time_set_lab = tk.Label(
             frame_menu_fields,
-            text='Time:', font=CONFIG['fonts']['S'],
-            bg=CONFIG['colors']['menu'])
+            text='Time:', font=self._settings['fonts']['S'],
+            bg=self._settings['colors']['menu'])
         time_set_lab.pack(side='left')
 
         time_spin = tk.Spinbox(
             frame_menu_fields,
-            width=3, from_=self.seconds_min, to=self.seconds_max,
-            textvariable=self.time_var, font=CONFIG['fonts']['L'])
+            width=3,
+            from_=self._settings['seconds']['min'],
+            to=self._settings['seconds']['max'],
+            textvariable=self._time_var,
+            font=self._settings['fonts']['L'])
         time_spin.pack(side='left', fill='y')
 
         count_set_lab = tk.Label(
             frame_menu_fields,
-            text='Clicks:', font=CONFIG['fonts']['S'],
-            bg=CONFIG['colors']['menu'])
+            text='Clicks:',
+            font=self._settings['fonts']['S'],
+            bg=self._settings['colors']['menu'])
         count_set_lab.pack(side='left')
 
         press_count_spin = tk.Spinbox(
             frame_menu_fields,
-            width=3, from_=self.clicks_min, to=self.clicks_max,
-            textvariable=self.press_count_var, font=CONFIG['fonts']['L'])
+            width=3,
+            from_=self._settings['clicks']['min'],
+            to=self._settings['clicks']['max'],
+            textvariable=self._press_count_var,
+            font=self._settings['fonts']['L'])
         press_count_spin.pack(side='left', fill='y')
 
-        self.start_game_button = tk.Button(
+        self._start_game_button = tk.Button(
             frame_menu_fields,
-            text='START', command=self.start_game, font=CONFIG['fonts']['S'])
-        self.start_game_button.pack(side='left', padx=5)
+            text='START',
+            font=self._settings['fonts']['S'],
+            command=self._controller.start_game)
+        self._start_game_button.pack(side='left', padx=5)
 
-    def _build_game_frame(self):
+    def _build_game_frame(self, phrase: str) -> None:
         frame_game = tk.Frame(self)
         frame_game.pack(fill='both', expand=True)
 
-        self.frame_with_button = tk.Frame(frame_game)
-        self.frame_with_button.pack(fill='both', expand=True, padx=15, pady=15)
+        self._buttons_frame = tk.Frame(frame_game)
+        self._buttons_frame.pack(fill='both', expand=True, padx=15, pady=15)
 
-        self.button = tk.Button(
-            self.frame_with_button,
-            text=self._model.phrase, width=13, font=CONFIG['fonts']['L'])
-        self.button.config(command=self.update_count, state='disabled')
-        self.button.pack(expand=True)
+        self._button = tk.Button(
+            self._buttons_frame,
+            text=phrase,
+            width=13,
+            font=self._settings['fonts']['L'])
+        self._button.config(
+            command=self._controller.update_count, state='disabled')
+        self._button.pack(expand=True)
 
-    def _build_result_frame(self):
-        frame_result = tk.Frame(self, bg=CONFIG['colors']['surface'])
+    def _build_result_frame(self) -> None:
+        frame_result = tk.Frame(self, bg=self._settings['colors']['surface'])
         frame_result.pack(side='bottom', fill='x')
 
         frame_result_fields = tk.Frame(frame_result)
         frame_result_fields.pack(padx=5, pady=5)
 
-        self.time_last_label = tk.Label(
+        self._time_last_label = tk.Label(
             frame_result_fields,
-            text='Time: 000 сек.', bg=CONFIG['colors']['surface'],
-            font=CONFIG['fonts']['S'])
-        self.time_last_label.pack(side='left')
+            text='Time: 000 сек.', bg=self._settings['colors']['surface'],
+            font=self._settings['fonts']['S'])
+        self._time_last_label.pack(side='left')
 
-        self.click_count_label = tk.Label(
+        self._click_count_label = tk.Label(
             frame_result_fields,
-            text='Clicks: 000', bg=CONFIG['colors']['surface'],
-            font=CONFIG['fonts']['S'])
-        self.click_count_label.pack(side='left')
+            text='Clicks: 000', bg=self._settings['colors']['surface'],
+            font=self._settings['fonts']['S'])
+        self._click_count_label.pack(side='left')
 
-    def _move_button(self, to_center: bool = False) -> None:
-        max_width = self.frame_with_button.winfo_width() - self.button_width
-        max_height = self.frame_with_button.winfo_height() - self.button_height
-        self.button.place_forget()
-        self.button.place(
+    def build(self, start_phrase: str) -> None:
+        self.pack(fill='both', expand=True)
+        self._build_menu_frame()
+        self._build_game_frame(start_phrase)
+        self._build_result_frame()
+
+    def move_button(self, to_center: bool = False) -> None:
+        max_width = (
+            self._buttons_frame.winfo_width()
+            - self._settings['button']['width']
+        )
+        max_height = (
+            self._buttons_frame.winfo_height()
+            - self._settings['button']['height']
+        )
+        self._button.place_forget()
+        self._button.place(
             x=max_width // 2 if to_center else randint(0, max_width),
             y=max_height // 2 if to_center else randint(0, max_height),
-            width=self.button_width, height=self.button_height)
+            width=self._settings['button']['width'],
+            height=self._settings['button']['height'])
 
-    def start_game(self):
-        self._model.start_game(self.press_count_var.get(), self.time_var.get())
-        self.time_last_label.config(text='Time: 000 сек.')
-        self.click_count_label.config(text='Clicks: 000')
-        self.button.config(state='normal', text=self._model.phrase)
-        if self.mode_var.get():
-            self._move_button(to_center=True)
+    @property
+    def mode(self) -> bool:
+        return self._mode_var.get()
+
+    @property
+    def press_count(self) -> int:
+        return self._press_count_var.get()
+
+    @press_count.setter
+    def press_count(self, value: int) -> None:
+        self._press_count_var.set(value)
+
+    @property
+    def time(self) -> int:
+        return self._time_var.get()
+
+    @time.setter
+    def time(self, value: int) -> None:
+        self._time_var.set(value)
+
+    def update_time_label(self, seconds: int) -> None:
+        self._time_last_label.config(text=f'Time: {seconds % 1000:03} sec.')
+
+    def update_click_label(self, clicks: int) -> None:
+        self._click_count_label.config(text=f'Clicks: {clicks:03}')
+
+    def update_button_phrase(self, phrase: str) -> None:
+        self._button.config(text=phrase)
+
+    def draw_initial_state(self, phrase: str) -> None:
+        self._time_last_label.config(text='Time: 000 сек.')
+        self._click_count_label.config(text='Clicks: 000')
+        self._button.config(state='normal', text=phrase)
+        if self.mode:
+            self.move_button(to_center=True)
         else:
-            self.button.pack(expand=True)
-        self.update_time()
+            self._button.pack(expand=True)
 
-    def update_count(self):
-        if self.mode_var.get():
-            self._move_button()
-
-        self._model.register_click()
-        if self._model.state == 'game':
-            self.button.config(text=self._model.phrase)
-            self.click_count_label.config(
-                text=f'Clicks: {self._model.clicks:03}')
+    def draw_end_game(self, win: bool, phrase: str) -> None:
+        self._button.config(state='disabled', text=phrase)
+        if win:
+            messagebox.showinfo('Game over', 'You win!')
         else:
-            self.button.config(state='disabled', text=self._model.phrase)
-            if self._model.state == 'fail':
-                messagebox.showinfo('Game over', 'You lose!')
-            else:  # win
-                messagebox.showinfo('Game over', 'You win!')
-
-    def update_time(self):
-        if self._model.state == 'game':
-            self.time_last_label.config(
-                text=f'Time: {self._model.seconds_left % 1000:03} sec.')
-            self.after(1000, self.update_time)
-        elif self._model.state == 'fail':
             messagebox.showinfo('Game over', 'You lose!')
-            self.button.config(state='disabled', text=self._model.phrase)
 
 
-def main():
-    root = tk.Tk()
-    root.title(CONFIG['title'])
-    root.minsize(**CONFIG['window_size'])
-
+def main() -> None:
     model = CrazyClickerModel(**CONFIG['phrases'])
-    view = CrazyClickerInterface(root, **CONFIG['defaults'], model=model)
-    view.build()
-    root.mainloop()
+    controller = CrazyClickerController(model)
+    view = CrazyClickerInterface(controller, CONFIG['view_settings'])
+
+    controller.set_view(view)
+    controller.run_application()
 
 
 if __name__ == '__main__':
