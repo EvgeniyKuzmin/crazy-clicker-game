@@ -1,6 +1,6 @@
 [flake8]
 ## Common settings:
-exclude = .venv/
+exclude = .venv*/
 
 max-line-length = 79
 max-complexity = 10
@@ -8,6 +8,7 @@ statistics = True
 
 ## flake8-import-order
 import-order-style = google
+application-import-names = crazy_clicker_game
 
 ## flake8-quotes
 inline-quotes = single
