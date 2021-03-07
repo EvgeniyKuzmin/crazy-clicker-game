@@ -1,9 +1,10 @@
+from collections import Counter
 from itertools import chain, repeat
 from random import randint
 import time
 import tkinter as tk
 from tkinter import messagebox
-from typing import Optional
+from typing import Optional, Sequence
 
 
 CONFIG = {
@@ -30,23 +31,36 @@ CONFIG = {
         'width': 410,
         'height': 170,
     },
+    'phrases': {
+        'start_phrase': 'Click START',
+        'win_phrase': 'Well done...',
+        'fail_phrase': 'Game Over',
+        'gaming_phrases': [
+            'Click me',
+            'Faster!',
+            'MUCH FASTER!',
+            'PUSH, PUSH!!',
+            'Give MORE!',
+            'Almost...',
+            'Well done...',
+        ],
+    },
 }
 
 
 class CrazyClickerModel:
 
-    _phrases = (
-        'Click me',
-        'Faster!',
-        'MUCH FASTER!',
-        'PUSH, PUSH!!',
-        'Give MORE!',
-        'Almost...',
-        'Well done...',
-    )
     _states = ('game', 'win', 'fail')
 
-    def __init__(self) -> None:
+    def __init__(
+            self, start_phrase: str, gaming_phrases: Sequence[str],
+            fail_phrase: str, win_phrase: str) -> None:
+
+        self._start_phrase = start_phrase
+        self._gaming_phrases = gaming_phrases
+        self._fail_phrase = fail_phrase
+        self._win_phrase = win_phrase
+
         self.clicks = None
         self._clicks_to_win = None
         self._start_time = None
@@ -59,12 +73,13 @@ class CrazyClickerModel:
         self._start_time = time.time()
         self._end_time = self._start_time + seconds
         self._phrase_mapping = {
-            i: self._phrases[phrase_i] for i, phrase_i in enumerate(chain(
-                repeat(0, self._clicks_to_win % (len(self._phrases) - 1)),
-                *[
-                    repeat(i, self._clicks_to_win // (len(self._phrases) - 1))
-                    for i in range(len(self._phrases))
-                ]))
+            click_index: phrase for click_index, phrase in enumerate(
+                chain.from_iterable(
+                    repeat(phr, cnt) for phr, cnt in
+                    Counter(
+                        self._gaming_phrases[ci % len(self._gaming_phrases)]
+                        for ci in range(self._clicks_to_win)
+                    ).items()))
         }
 
     def register_click(self) -> None:
@@ -88,16 +103,13 @@ class CrazyClickerModel:
     @property
     def phrase(self) -> str:
         if self.state is None:
-            return 'Click START'
-        if self.state == 'win':
-            return self._phrases[-1]
+            return self._start_phrase
+        elif self.state == 'win':
+            return self._win_phrase
         elif self.state == 'fail':
-            return 'Game Over'
+            return self._fail_phrase
         else:
-            try:
-                return self._phrase_mapping[self.clicks]
-            except KeyError:
-                return self._phrases[0]
+            return self._phrase_mapping[self.clicks]
 
 
 class CrazyClickerInterface(tk.Frame):
@@ -265,7 +277,7 @@ def main():
     root.title(CONFIG['title'])
     root.minsize(**CONFIG['window_size'])
 
-    model = CrazyClickerModel()
+    model = CrazyClickerModel(**CONFIG['phrases'])
     view = CrazyClickerInterface(root, **CONFIG['defaults'], model=model)
     view.build()
     root.mainloop()
